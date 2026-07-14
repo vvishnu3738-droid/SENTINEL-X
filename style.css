@@ -1,0 +1,23 @@
+@import url('https://googleapis.com');
+:root {
+    --neon-cyan: #00f2fe;
+    --neon-green: #4ade80;
+    --neon-red: #ef4444;
+    --dark-bg: #060b13;
+}
+body {
+    font-family: 'Share Tech Mono', monospace;
+    background-color: var(--dark-bg);
+    background-image: radial-gradient(circle at 50% 50%, #0d1b2a 0%, #060b13 100%);
+    overflow-x: hidden;
+}
+.cyber-panel {
+    background: rgba(13, 21, 39, 0.6);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 242, 254, 0.15);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
+}
+.font-orbitron { font-family: 'Orbitron', sans-serif; }
+.glow-text-cyan { text-shadow: 0 0 10px rgba(0, 242, 254, 0.6); }
+.glow-text-green { text-shadow: 0 0 10px rgba(74, 222, 128, 0.6); }
+.glow-text-red { text-shadow: 0 0 10px rgba(239, 68, 68, 0.6); }

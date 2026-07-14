@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SENTINEL-X // AI Engine Interface</title>
+    <script src="https://tailwindcss.com"></script>
+    <script src="https://jsdelivr.net"></script>
+    <link rel="stylesheet" href="https://cloudflare.com">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="text-slate-300 p-6 min-h-screen flex flex-col justify-between">
+    <header class="w-full max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center p-4 mb-6 border-b border-cyan-500/20 bg-slate-950/80 rounded-t-xl">
+        <div>
+            <h1 class="text-3xl font-black text-cyan-400 font-orbitron tracking-widest glow-text-cyan">SENTINEL-X</h1>
+            <p class="text-xs text-cyan-500/60 tracking-widest uppercase mt-0.5">Physical AI Safety Automation Console</p>
+        </div>
+        <div class="flex gap-8 mt-4 sm:mt-0 font-mono text-xs">
+            <div class="text-right"><span class="text-slate-500 block">BASE COMMS</span><span class="text-green-400 font-bold"><i class="fas fa-satellite-dish mr-1 animate-pulse"></i> ONLINE</span></div>
+            <div class="text-right"><span class="text-slate-500 block">BATTERY CELL</span><span class="text-cyan-400 font-bold"><i class="fas fa-charging-station mr-1"></i> 94%</span></div>
+        </div>
+    </header>
+    <main class="w-full max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6 flex-1">
+        <div class="flex flex-col gap-6">
+            <div id="ai-state-badge" class="bg-green-950/40 border border-green-500 text-green-400 p-6 rounded-xl text-center">
+                <span class="text-xs uppercase tracking-wider block text-slate-400 mb-1"><i class="fas fa-brain mr-1"></i> TinyML Processing State</span>
+                <div id="ai-state-label" class="text-3xl font-bold font-orbitron glow-text-green">SAFE</div>
+            </div>
+            <div class="cyber-panel p-5 rounded-xl flex-1">
+                <h3 class="text-cyan-400 text-xs tracking-widest font-bold uppercase mb-4"><i class="fas fa-layer-group mr-2"></i> Kinematic Telemetry</h3>
+                <div class="grid grid-cols-2 gap-4 text-xs font-mono">
+                    <div class="bg-black/30 p-3 rounded border border-slate-800"><span class="text-slate-500 block">NAVIGATION</span><span class="text-sm font-bold text-cyan-400">AUTONOMOUS</span></div>
+                    <div class="bg-black/30 p-3 rounded border border-slate-800"><span class="text-slate-500 block">CHASSIS TILT</span><span class="text-sm font-bold text-slate-200">0.8° NORMAL</span></div>
+                    <div class="bg-black/30 p-3 rounded border border-slate-800"><span class="text-slate-500 block">PROXIMITY</span><span class="text-sm font-bold text-yellow-500">182 cm</span></div>
+                    <div class="bg-black/30 p-3 rounded border border-slate-800"><span class="text-slate-500 block">DOCK ALIGN</span><span class="text-sm font-bold text-slate-400">READY</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="cyber-panel p-6 rounded-xl flex flex-col justify-between">
+            <div>
+                <h3 class="text-cyan-400 text-xs tracking-widest font-bold uppercase mb-6"><i class="fas fa-wave-square mr-2"></i> Environment Signal Bus</h3>
+                <div class="space-y-4 font-mono text-sm">
+                    <div class="flex justify-between border-b border-slate-800/80 pb-2"><span><i class="fas fa-thermometer-three-quarters text-red-500 mr-2"></i>Temperature</span><span id="val-temp" class="font-bold text-red-400">28.4 °C</span></div>
+                    <div class="flex justify-between border-b border-slate-800/80 pb-2"><span><i class="fas fa-tint text-blue-500 mr-2"></i>Humidity</span><span id="val-humidity" class="font-bold text-blue-400">52.1 %</span></div>
+                    <div class="flex justify-between border-b border-slate-800/80 pb-2"><span><i class="fas fa-wind text-teal-400 mr-2"></i>Air Quality</span><span id="val-gas" class="font-bold text-teal-400">110 ppm</span></div>
+                    <div class="flex justify-between border-b border-slate-800/80 pb-2"><span><i class="fas fa-smog text-orange-500 mr-2"></i>Smoke Index</span><span id="val-smoke" class="font-bold text-orange-400">95 / 1023</span></div>
+                </div>
+            </div>
+            <div class="mt-6 pt-4 border-t border-slate-800">
+                <div class="flex justify-between text-xs mb-1.5"><span class="text-slate-400 uppercase">Calculated Risk Index</span><span id="risk-percentage" class="font-bold text-green-400">0%</span></div>
+                <div class="w-full bg-slate-950 border border-slate-800 h-2.5 rounded-full overflow-hidden">
+                    <div id="risk-index-bar" class="bg-gradient-to-r from-green-400 to-red-500 h-full w-[5%] transition-all duration-500"></div>
+                </div>
+            </div>
+        </div>
+        <div class="flex flex-col gap-6">
+            <div class="cyber-panel p-4 rounded-xl flex-1 min-h-[180px]">
+                <h3 class="text-cyan-400 text-xs tracking-widest font-bold uppercase mb-2"><i class="fas fa-analytics mr-2"></i> Real-Time Vectors</h3>
+                <div class="relative w-full h-[85%]"><canvas id="analyticsChart"></canvas></div>
+            </div>
+            <div class="cyber-panel p-4 rounded-xl h-44 flex flex-col bg-black/40">
+                <h3 class="text-cyan-400 text-xs tracking-widest font-bold uppercase mb-2"><i class="fas fa-code mr-2"></i> System Event Terminal</h3>
+                <div id="terminal-logs" class="flex-1 overflow-y-auto font-mono text-[11px] space-y-1.5 pr-2"></div>
+            </div>
+        </div>
+    </main>
+    <footer class="w-full max-w-7xl mx-auto mt-6 p-4 bg-slate-950/40 border border-slate-800 rounded-xl flex flex-col sm:flex-row justify-between items-center gap-4 text-xs font-mono">
+        <span class="text-slate-500">SENTINEL-X Node Console Engine Alpha // Ready for Physical Testbed integration</span>
+        <div class="flex gap-2">
+            <button onclick="triggerSystemOverride('clear')" class="border border-green-500/40 bg-green-950/20 text-green-400 px-3 py-1.5 rounded hover:bg-green-950/50 transition-all">Inject Safe Run</button>
+            <button onclick="triggerSystemOverride('leak')" class="border border-yellow-500/40 bg-yellow-950/20 text-yellow-400 px-3 py-1.5 rounded hover:bg-yellow-950/50 transition-all">Inject Gas Leak</button>
+            <button onclick="triggerSystemOverride('fire')" class="border border-red-500/40 bg-red-950/20 text-red-500 px-3 py-1.5 rounded hover:bg-red-950/50 transition-all">Inject Thermal Runaway</button>
+        </div>
+    </footer>
+    <script src="app.js"></script>
+</body>
+</html>
