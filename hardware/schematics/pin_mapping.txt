@@ -1,0 +1,36 @@
+================================================================================
+SENTINEL-X // ARDUINO UNO R4 WIFI PHYSICAL PIN-MAPPING MATRIX
+================================================================================
+
+1. SERIAL COMMUNICATION BUS ALLOCATION
+--------------------------------------------------------------------------------
+[I2C BUS]  -> Pins: A4 (SDA) & A5 (SCL)  
+              - Connected Devices (Parallel Daisy-Chain Topology):
+                * MPU6050 6-Axis Gyro/Accelerometer (I2C Address: 0x68)
+                * BH1750 Digital Ambient Lux Sensor (I2C Address: 0x23)
+[UART BUS] -> Pins: D0 (RX) & D1 (TX)
+                * Reserved for high-speed hardware platform serial debugging.
+[SOFT-UART]-> Pins: D2 (RX) & D7 (TX)
+                * Connected Device: DFPlayer Mini MP3 Audio Module (9600 Baud)
+
+2. ANALOG INPUT BUS (0V - 5V DC Range)
+--------------------------------------------------------------------------------
+[A0] -> MQ-135 Hazardous Gas / Air Quality Core Sensor (Analog Signal Out)
+[A1] -> MQ-2 Volatile Smoke / LPG Leak Detection Sensor (Analog Signal Out)
+[A2] -> DC Voltage Sensor Module (Raw 12.8V Battery Divider Monitoring Interface)
+
+3. DIGITAL I/O & PWM RAIL CONFIGURATION
+--------------------------------------------------------------------------------
+[D3]  -> PWM Output    -> L298N Motor Driver (Left-Side Velocity Drive Channel)
+[D4]  -> Digital Out   -> L298N Direction Control Phase Pin IN1
+[D5]  -> PWM Output    -> L298N Motor Driver (Right-Side Velocity Drive Channel)
+[D6]  -> Digital Out   -> L298N Direction Control Phase Pin IN2
+[D8]  -> Digital Input  -> HC-SR04 Ultrasonic Rangefinder [FRONT] (Echo Pin)
+[D9]  -> Digital Output -> HC-SR04 Ultrasonic Rangefinder [FRONT] (Trigger Pin)
+[D10] -> Digital Output -> Common Cathode RGB Visual Alert LED [RED Node]
+[D11] -> Digital Output -> Common Cathode RGB Visual Alert LED [GREEN Node]
+[D12] -> Digital Output -> 5V High-Decibel Emergency Piezo Acoustic Buzzer
+[D13] -> Digital Input  -> DHT22 Digital Temperature & Humidity Data Line
+
+================================================================================
+Verification Verdict: Zero physical resource overlap. System buses fully isolated.
