@@ -3,6 +3,14 @@
  * மைக்ரோகண்ட்ரோலர் கட்டமைப்பு: Renesas RA4W1 (Arduino UNO R4 WiFi)
  * டெவலப்பர் டிராக்: சிக்னல் பிராசஸிங், அளவுத்திருத்தம் & டேட்டா ஃபில்டரிங் இன்ஜினியரிங்
  */
+#include <Wire.h>             // I2C தகவல் தொடர்பு
+#include <Adafruit_GFX.h>     // கிராபிக்ஸ் கோர்கள்
+#include <Adafruit_SSD1306.h> // OLED டிஸ்ப்ளே லைப்ரரி
+
+#define SCREEN_WIDTH 128 
+#define SCREEN_HEIGHT 64 
+#define OLED_RESET    -1 
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 #include <ArduinoJson.h>
 
@@ -40,7 +48,18 @@ void setup() {
   Serial.println(F("\n=================================================="));
   Serial.println(F(" SENTINEL-X // SENSOR SYSTEM CALIBRATION INTERFACE "));
   Serial.println(F("=================================================="));
-  
+    // 0x3C ஐடி மூலமாக OLED திரையை ஆன் செய்தல்
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("[OLED ERROR]: SSD1306 Hardware failed!"));
+  } else {
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(15, 25);
+    display.println(F("SENTINEL-X 2099 CYBER"));
+    display.display();
+  }
+
   // 1. ஃபில்டர் பஃபரை ஆரம்பத்தில் பூஜ்ஜியமாக்குதல்
   for (int i = 0; i < FILTER_SIZE; i++) {
     gasReadingsBuffer[i] = 0;
@@ -171,4 +190,27 @@ void emitCalibratedDataPacket() {
   String outputStream;
   serializeJson(doc, outputStream);
   Serial.println(outputStream); // இந்த சுத்தமான தரவு மெம்பர் 1-ன் வெப் வரைபடத்தை துல்லியமாக இயக்கும்
+}
+void refreshOnboardOLEDInterface() {
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.println(F("====================="));
+  display.setCursor(10, 8);
+  display.println(F("SENTINEL-X // 2099"));
+  display.setCursor(0, 16);
+  display.println(F("====================="));
+
+  // தற்போதைய நிலையைத் திரையில் காட்டுதல்
+  display.setCursor(0, 30);
+  display.print(F("STATE: "));
+  display.println(currentSystemState == STATE_HAZARD_RESPONSE ? "⚠️ CRIT ALERT" : "ACTIVE PATROL");
+
+  // சென்சார் அளவீடுகள்
+  display.setCursor(0, 46);
+  display.print(F("T: ")); display.print(readTempCelsius, 1); display.print(F("C | G: ")); display.print(readGasPPM);
+  display.setCursor(0, 56);
+  display.print(F("BATTERY POWER: ")); display.print(batteryCapacityPercent); display.println(F("%"));
+  display.display();
 }
