@@ -6,6 +6,14 @@
 #include <Wire.h>             // I2C தகவல் தொடர்பு
 #include <Adafruit_GFX.h>     // கிராபிக்ஸ் கோர்கள்
 #include <Adafruit_SSD1306.h> // OLED டிஸ்ப்ளே லைப்ரரி
+#include <SoftwareSerial.h>
+
+// Software Serial Communication Bus configuration pins for DFPlayer Mini
+// Pin D2 connects to DFPlayer TX | Pin D7 connects to DFPlayer RX (via 1K Ohm Resistor)
+SoftwareSerial audioSerialBus(2, 7); 
+
+// Core command transmission array packet for the DFPlayer hardware
+const byte DFPLAYER_PLAY_TRACK_CMD[] = {0x7E, 0xFF, 0x06, 0x03, 0x00, 0x00, 0x01, 0xFE, 0xF7};
 
 #define SCREEN_WIDTH 128 
 #define SCREEN_HEIGHT 64 
@@ -44,7 +52,13 @@ int bufferWritePointer = 0;
 void setup() {
   Serial.begin(115200);
   while (!Serial) { ; }
+    // Initialize the audio transmission matrix link at 9600 baud rate
+  audioSerialBus.begin(9600);
+  delay(500); // Allow hardware controller to stabilize power
   
+  // Trigger system boot vocal alert announcement clip (Track 0001)
+  executeDFPlayerHardwareTrigger(1); 
+
   Serial.println(F("\n=================================================="));
   Serial.println(F(" SENTINEL-X // SENSOR SYSTEM CALIBRATION INTERFACE "));
   Serial.println(F("=================================================="));
@@ -213,4 +227,25 @@ void refreshOnboardOLEDInterface() {
   display.setCursor(0, 56);
   display.print(F("BATTERY POWER: ")); display.print(batteryCapacityPercent); display.println(F("%"));
   display.display();
+}
+void executeDFPlayerHardwareTrigger(int assignedTrackIndex) {
+  /*
+   * Transmits a standardized 9-byte hex frame down the software serial bus
+   * to command the DFPlayer Mini to execute specific file index registers.
+   */
+  byte commandPacketFrame[9];
+  
+  // Clone the base operational hardware template package array
+  memcpy(commandPacketFrame, DFPLAYER_PLAY_TRACK_CMD, 9);
+  
+  // Inject the dynamically requested track integer value straight into byte slot 6
+  commandPacketFrame[6] = (byte)assignedTrackIndex;
+  
+  // Recalculate checksum logic corrections dynamically for frame delivery accuracy
+  int frameCheckSumCalculated = - (0xFF + 0x06 + 0x03 + 0x00 + 0x00 + assignedTrackIndex);
+  commandPacketFrame[7] = (byte)(frameCheckSumCalculated >> 8);   // High byte correction
+  commandPacketFrame[8] = (byte)(frameCheckSumCalculated & 0xFF);  // Low byte correction
+  
+  // Flush compiled hex frame array packets directly into the TX pipeline lane
+  audioSerialBus.write(commandPacketFrame, 9);
 }
