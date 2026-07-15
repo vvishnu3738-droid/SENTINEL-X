@@ -1,158 +1,158 @@
 /*
- * SENTINEL-X // PRODUCTION TINYML SENSOR FUSION & INFERENCE ENGINE
+ * SENTINEL-X // PRODUCTION DIAGNOSTIC ENGINE & SYSTEM FAIL-SAFE FIRMWARE
  * மைக்ரோகண்ட்ரோலர் கட்டமைப்பு: Renesas RA4W1 (Arduino UNO R4 WiFi)
- * டெவலப்பர் டிராக்: கோர் உட்பொதிக்கப்பட்ட AI & TinyML அமைப்புகள் பொறியியல்
+ * டெவலப்பர் டிராக்: சிஸ்டம்ஸ் பாதுகாப்பு, நம்பகத்தன்மை & ஃபால்ட்-டாலரண்ட் இன்ஜினியரிங்
  */
 
 #include <ArduinoJson.h>
 
-// 1. SYSTEM FINITE STATE MACHINE REGISTRY (ரோபோட்டின் நிலைகள்)
+// 1. SYSTEM FINITE STATE MACHINE REGISTRY (மேம்படுத்தப்பட்ட 5 நிலைகள்)
 enum RobotState {
   STATE_INITIALIZING,
   STATE_AUTONOMOUS_PATROL,
   STATE_HAZARD_RESPONSE,
-  STATE_AUTO_DOCKING
+  STATE_AUTO_DOCKING,
+  STATE_SYSTEM_FAULT_LOCK  // பழுது ஏற்பட்டால் லாக் ஆகும் புதிய அவசர நிலை
 };
 
 RobotState currentSystemState = STATE_INITIALIZING;
-unsigned long lastAILoopTimestamp = 0;
-const unsigned long aiInferenceInterval = 1000; // 1 விநாடிக்கு ஒருமுறை இயங்கும் AI டைமர்
+unsigned long lastDiagnosticTimestamp = 0;
+const unsigned long diagnosticInterval = 1000; // 1 விநாடிக்கு ஒருமுறை நடக்கும் பாதுகாப்பு தணிக்கை
 
-// வன்பொருள் சென்சார் மாறிகள்
+// வன்பொருள் சென்சார் மற்றும் பழுது கண்காணிப்பு மாறிகள் (Hardware & Fault Registers)
 float readTempCelsius = 26.5;
-int readSmokeIndex = 110;  // அனலாக் எல்லை: 0 முதல் 1023
-int readGasPPM = 45;       // காற்றின் தரம் PPM
-float readTiltAngle = 0.0; // காரின் சாய்வு கோணம்
+int readSmokeIndex = 110;  
+int readGasPPM = 45;       
+float readTiltAngle = 0.0; 
 int batteryCapacityPercent = 95;
+
+// சென்சார் ஆரோக்கியக் கண்காணிப்பாளர்கள் (Health Status Registers)
+bool isTempSensorHealthy = true;
+bool isGasSensorHealthy = true;
+bool isSmokeSensorHealthy = true;
+String activeFaultDescription = "NONE";
 
 void setup() {
   Serial.begin(115200);
-  while (!Serial) { ; } // கணினியுடன் இணைப்பு ஏற்படும் வரை காத்திருக்கவும்
+  while (!Serial) { ; } 
   
-  Serial.println(F("[TINYML BOOT]: Initializing Embedded Neural Network Layers..."));
+  Serial.println(F("[SAFETY BOOT]: Securing system core buses..."));
   delay(1000);
   
   currentSystemState = STATE_AUTONOMOUS_PATROL;
-  Serial.println(F("[TINYML BOOT]: Multi-Layer Perceptron Weights Loaded. System Live."));
+  Serial.println(F("[SAFETY BOOT]: Hardware Diagnostic Monitors Online. System Guard Active."));
 }
 
 void loop() {
   unsigned long currentMillis = millis();
 
-  // நான்-பிளாக்கிங் சுழற்சி லூப்
-  if (currentMillis - lastAILoopTimestamp >= aiInferenceInterval) {
-    lastAILoopTimestamp = currentMillis;
+  // நான்-பிளாக்கிங் பாதுகாப்பு தணிக்கை சுழற்சி
+  if (currentMillis - lastDiagnosticTimestamp >= diagnosticInterval) {
+    lastDiagnosticTimestamp = currentMillis;
     
-    // படி A: சென்சார்களில் இருந்து போலி தரவுகளைப் பெறுதல்
-    executeSensorTelemetryDataAcquisition();
+    // படி A: சென்சார் தரவுகளைப் பெறுதல்
+    executeSensorDataAcquisition();
     
-    // படி B: உட்பொதிக்கப்பட்ட TinyML செயற்கை நுண்ணறிவு நரம்பியல் நெட்வொர்க் இயக்கம்
-    float calculatedRiskIndex = executeEmbeddedTinyMLInference();
+    // படி B: வன்பொருள் ஆரோக்கிய தணிக்கை (Hardware Health Audit)
+    executeHardwareHealthAudit();
     
-    // படி C: AI கணக்கிட்ட ஆபத்து சதவீதத்திற்கு ஏற்ப நிலைகளை மாற்றுதல்
-    executeDynamicStateTransitionLogic(calculatedRiskIndex);
-    
-    // படி D: நிகழ்நேர தரவை வைஃபை டேஷ்போர்டுக்கு அனுப்புதல்
-    transmitDataPacketToWebDashboard(calculatedRiskIndex);
-  }
-}
-
-// ================================================================================
-// TINYML கணித அல்காரிதம் பகுதிகள் (TINYML MATHEMATICAL CORE METHODS)
-// ================================================================================
-
-void executeSensorTelemetryDataAcquisition() {
-  // உண்மையான சென்சார் மதிப்புகள் மாறுவது போலவே போலி மதிப்புகளை உருவாக்குதல்
-  readTempCelsius = 25.0 + (random(0, 40) / 10.0);
-  readGasPPM = random(35, 70);
-  readSmokeIndex = random(95, 140);
-  readTiltAngle = (random(-15, 16) / 10.0);
-  
-  // AI-ன் செயல்பாட்டைச் சோதிக்க 7% வாய்ப்பில் ஒரு போலி விபத்து சிக்னலை உள்ளே செலுத்துதல்
-  if (random(0, 100) > 93) {
-    readTempCelsius = 52.4;
-    readGasPPM = 480;
-    readSmokeIndex = 620;
-    Serial.println(F("\n[ANOMALY GENERATOR]: Injecting simulated toxic flame burst signature..."));
-  }
-
-  // பேட்டரி குறைவதை உருவகப்படுத்துதல்
-  if (currentSystemState == STATE_AUTONOMOUS_PATROL && batteryCapacityPercent > 0) {
-    static int drainCounter = 0;
-    if (++drainCounter >= 5) { 
-      batteryCapacityPercent--;
-      drainCounter = 0;
+    // படி C: TinyML இன்டர்ன்ஸ் மற்றும் தோல்வி-காப்பு லாஜிக் இயக்கம்
+    if (currentSystemState != STATE_SYSTEM_FAULT_LOCK) {
+      float calculatedRisk = executeTinyMLSensorFusionInference();
+      executeDynamicStateEngine(calculatedRisk);
+    } else {
+      executeEmergencySafeHoldBrake(); // பழுது ஏற்பட்டால் மோட்டார்களை பிரேக் அடித்தல்
     }
+    
+    // படி D: பாதுகாப்பு லாக் விபரங்களை டேஷ்போர்டுக்கு அனுப்புதல்
+    transmitSafetyTelemetryPacket();
   }
 }
 
-float executeEmbeddedTinyMLInference() {
+// ================================================================================
+// பாதுகாப்பு தணிக்கை மற்றும் தோல்வி-காப்பு பகுதிகள் (SAFETY AUDIT METHODS)
+// ================================================================================
+
+void executeSensorDataAcquisition() {
+  // சென்சார் மதிப்புகள் மாறுவதை உருவாக்குதல்
+  readTempCelsius = 25.0 + (random(0, 30) / 10.0);
+  readGasPPM = random(35, 60);
+  readSmokeIndex = random(95, 130);
+  readTiltAngle = (random(-10, 11) / 10.0);
+  
+  // டெஸ்டிங்கிற்காக 5% வாய்ப்பில் ஒரு சென்சார் ஒயர் அறுந்து போவதை உருவாக்குதல் (Hardware Fault Injection)
+  if (random(0, 100) > 95) {
+    readTempCelsius = -999.0; // DHT22 ஒயர் கழன்றதைக் குறிக்கும் போலி எண்
+    Serial.println(F("\n[FAULT INJECTOR]: Simulating physical wire rupture on DHT22 Bus..."));
+  }
+}
+
+void executeHardwareHealthAudit() {
   /*
-   * இது ஒரு மல்டி-லேயர் பெர்செப்ட்ரான் (MLP) நரம்பியல் நெட்வொர்க் போல வேலை செய்யும்.
-   * வெவ்வேறு எல்லைகளில் இருக்கும் சென்சார் மதிப்புகளை 0.00 முதல் 1.00 என்ற அளவில் மாற்றி (Normalize),
-   * பின்னர் மேட்ரிக்ஸ் புள்ளி பெருக்கல் (Dot-Product Weights) லாஜிக்கைப் பயன்படுத்தும்.
+   * வன்பொருள் எல்லைகளைத் தணிக்கை செய்தல்.
+   * எண்கள் எல்லையைத் தாண்டினால் உடனடியாகப் பாதுகாப்புப் பொறியை ஆன் செய்யும்.
    */
   
-  // 1. மின்-மேக்ஸ் தரவு சீரமைப்பு கணிதம் (Min-Max Normalization)
-  float normTemp  = (readTempCelsius - 0.0) / (60.0 - 0.0);       // அதிகபட்ச வெப்ப எல்லை 60C
-  float normSmoke = (float)(readSmokeIndex - 0) / (1023.0 - 0.0);  // 10-பிட் அனலாக் பின் எல்லை
-  float normGas   = (float)(readGasPPM - 0) / (500.0 - 0.0);       // நச்சு வாயு PPM எல்லை
-  float normTilt  = abs(readTiltAngle) / 45.0;                     // அதிகபட்ச பாதுகாப்பு சாய்வு கோணம் 45 டிகிரி
-
-  // 2. சென்சார் முக்கியத்துவ மதிப்புகள் ஒதுக்கீடு (மொத்தம் 1.00 வர வேண்டும்)
-  const float weightTemp  = 0.35;
-  const float weightSmoke = 0.30;
-  const float weightGas   = 0.30;
-  const float weightTilt  = 0.05;
-
-  // 3. நரம்பியல் நெட்வொர்க் அடுக்கு கூட்டல் (Dot Product Matrix Multiplication)
-  float rawNeuralSum = (normTemp * weightTemp) + 
-                       (normSmoke * weightSmoke) + 
-                       (normGas * weightGas) + 
-                       (normTilt * weightTilt);
-
-  // 4. இறுதி விபத்து அபாய சதவீதம் (0% முதல் 100% வரம்பிற்குள் மாற்றுதல்)
-  float localizedRiskScore = rawNeuralSum * 100.0; 
-  if (localizedRiskScore > 100.0) localizedRiskScore = 100.0;
-  if (localizedRiskScore < 0.0) localizedRiskScore = 0.0;
-
-  return localizedRiskScore;
+  // 1. வெப்பநிலை சென்சார் தணிக்கை (-10C க்குக் கீழ் அல்லது 75C க்கு மேல் போனால் பழுது)
+  if (readTempCelsius < -10.0 || readTempCelsius > 75.0) {
+    isTempSensorHealthy = false;
+    currentSystemState = STATE_SYSTEM_FAULT_LOCK;
+    activeFaultDescription = "DHT22_TEMPERATURE_SENSOR_DISCONNECTED_FAULT";
+  }
+  
+  // 2. கேஸ் சென்சார் தணிக்கை (PPM மதிப்பு எதிர்மறையாகப் போனால் பழுது)
+  if (readGasPPM < 0 || readGasPPM > 1000) {
+    isGasSensorHealthy = false;
+    currentSystemState = STATE_SYSTEM_FAULT_LOCK;
+    activeFaultDescription = "MQ135_GAS_SENSOR_HARDWARE_FAILURE";
+  }
 }
 
-void executeDynamicStateTransitionLogic(float currentRiskMetric) {
-  // விபத்து அபாய சதவீதம் 45% தாண்டினால் அவசர நிலைக்கு மாறுதல்
-  if (currentRiskMetric >= 45.0) {
+float executeTinyMLSensorFusionInference() {
+  // சென்சார்கள் ஆரோக்கியமாக இருந்தால் மட்டும் AI கணக்கீட்டைச் செய்தல்
+  float normTemp  = (readTempCelsius - 0.0) / 60.0;
+  float normSmoke = (float)readSmokeIndex / 1023.0;
+  float normGas   = (float)readGasPPM / 500.0;
+  
+  float riskScore = (normTemp * 0.35) + (normSmoke * 0.35) + (normGas * 0.30);
+  return (riskScore * 100.0);
+}
+
+void executeDynamicStateEngine(float riskMetric) {
+  if (riskMetric >= 45.0) {
     currentSystemState = STATE_HAZARD_RESPONSE;
-  } 
-  // பேட்டரி 20% கீழே குறைந்தால் சார்ஜிங் நிலைக்கு மாறுதல்
-  else if (batteryCapacityPercent <= 20) {
+  } else if (batteryCapacityPercent <= 20) {
     currentSystemState = STATE_AUTO_DOCKING;
-    // சார்ஜ் ஏறுவதை உருவகப்படுத்துதல்
-    batteryCapacityPercent += 25;
-    if (batteryCapacityPercent > 100) batteryCapacityPercent = 100;
-  } 
-  else {
+    batteryCapacityPercent = 100; // சார்ஜ் ஏறுவதை உருவகப்படுத்துதல்
+  } else {
     currentSystemState = STATE_AUTONOMOUS_PATROL;
   }
 }
 
-void transmitDataPacketToWebDashboard(float runningRiskScore) {
-  JsonDocument telemetryDoc;
+void executeEmergencySafeHoldBrake() {
+  // மோட்டார்களை பிரேக் அடித்து நிறுத்துதல் (Brake Actuators)
+  // நிஜப் பொருட்கள் வரும்போது இங்கு டிஜிட்டல் பின்கள் LOW ஆக்கப்படும்
+  Serial.print(F("[⚠️ CRITICAL FAIL-SAFE ACTIVATED]: "));
+  Serial.println(activeFaultDescription);
+  Serial.println(F("[⚠️ CRITICAL FAIL-SAFE]: Drivetrain Locked. Actuators Braked. Awaiting Maintenance."));
+}
+
+void transmitSafetyTelemetryPacket() {
+  JsonDocument safetyDoc;
   
-  String labelState = "PATROL";
-  if (currentSystemState == STATE_HAZARD_RESPONSE) labelState = "CRIT_HAZARD_ALERT";
-  if (currentSystemState == STATE_AUTO_DOCKING) labelState = (batteryCapacityPercent >= 100) ? "PATROL" : "CHARGING_AT_BASE";
+  String stringState = "PATROL";
+  if (currentSystemState == STATE_HAZARD_RESPONSE) stringState = "CRIT_HAZARD_ALERT";
+  if (currentSystemState == STATE_AUTO_DOCKING) stringState = "CHARGING_AT_BASE";
+  if (currentSystemState == STATE_SYSTEM_FAULT_LOCK) stringState = "SYSTEM_FAULT_LOCK"; // பழுது சிக்னல்
 
-  telemetryDoc["device"] = "SENTINEL-X";
-  telemetryDoc["state"] = labelState;
-  telemetryDoc["temp"] = readTempCelsius;
-  telemetryDoc["gas"] = readGasPPM;
-  telemetryDoc["smoke"] = readSmokeIndex;
-  telemetryDoc["tilt"] = readTiltAngle;
-  telemetryDoc["battery"] = batteryCapacityPercent;
-  telemetryDoc["risk_index"] = runningRiskScore; // AI கணக்கிட்டுத் தந்த இறுதி அபாய சதவீதம் (Risk Index Score)
+  safetyDoc["device"] = "SENTINEL-X";
+  safetyDoc["state"] = stringState;
+  safetyDoc["temp"] = (readTempCelsius == -999.0) ? 0.0 : readTempCelsius; // எர்ரர் எண்ணை மறைத்து 0 காட்டுதல்
+  safetyDoc["gas"] = readGasPPM;
+  safetyDoc["battery"] = batteryCapacityPercent;
+  safetyDoc["fault_log"] = activeFaultDescription; // வெப் பக்கத்தில் எந்த ஒயர் கழன்றது என்று காட்டும்
 
-  String outputBufferStream;
-  serializeJson(telemetryDoc, outputBufferStream);
-  Serial.println(outputBufferStream); // இந்த தரவு தான் மெம்பர் 1-ன் வெப் வரைபடத்தை இயக்கும்
+  String outputBuffer;
+  serializeJson(safetyDoc, outputBuffer);
+  Serial.println(outputBuffer); // இது மெம்பர் 1-ன் வெப் அலாரத்தை ஆன் செய்யும்
 }
