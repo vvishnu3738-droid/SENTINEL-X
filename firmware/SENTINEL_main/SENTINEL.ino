@@ -1,47 +1,53 @@
 /*
- * SENTINEL-X // PRODUCTION HUMAN-MACHINE INTERFACE (HMI) & VISUAL PERCEPTION ENGINE
+ * SENTINEL-X // PRODUCTION SENSOR CALIBRATION & SIGNAL SMOOTHING ENGINE
  * மைக்ரோகண்ட்ரோலர் கட்டமைப்பு: Renesas RA4W1 (Arduino UNO R4 WiFi)
- * டெவலப்பர் டிராக்: எச்எம்ஐ பாதுகாப்பு இன்ஜினியரிங், ஆப்டிகல் சிக்னலிங் & அலார ஆட்டோமேஷன்
+ * டெவலப்பர் டிராக்: சிக்னல் பிராசஸிங், அளவுத்திருத்தம் & டேட்டா ஃபில்டரிங் இன்ஜினியரிங்
  */
 
 #include <ArduinoJson.h>
 
-// 1. SYSTEM FINITE STATE MACHINE REGISTRY (5 தனித்துவ நிலைகள்)
 enum RobotState {
   STATE_INITIALIZING,
   STATE_AUTONOMOUS_PATROL,
   STATE_HAZARD_RESPONSE,
-  STATE_AUTO_DOCKING,
-  STATE_SYSTEM_FAULT_LOCK
+  STATE_AUTO_DOCKING
 };
 
 RobotState currentSystemState = STATE_INITIALIZING;
-unsigned long lastHMILoopTimestamp = 0;
-const unsigned long hmiRefreshInterval = 250; // 250ms அதிவேக எச்எம்ஐ சுழற்சி புதுப்பிப்பு டைமர்
+unsigned long lastExecutionTimestamp = 0;
+const unsigned long executionInterval = 1000; // 1 விநாடிக்கு ஒருமுறை இயங்கும் முதன்மை லூப்
 
-// கணினி தரவு மாறிகள்
+// சென்சார் தரவு மாறிகள்
 float readTempCelsius = 26.5;
-int readSmokeIndex = 110;  
-int readGasPPM = 45;       
-int batteryCapacityPercent = 95;
-String systemFaultLogCode = "NONE";
+int rawGasInput = 110;
+int filteredGasOutput = 110; // இரைச்சல் நீக்கப்பட்ட இறுதி கேஸ் மதிப்பு
+int batteryCapacityPercent = 100;
 
-// வன்பொருள் பின் ஒதுக்கீடுகள் (நாள் 1 - மிஷன் 02 மேட்ரிக்ஸ் படி இணைக்கப்பட்டது)
-const int PIN_RGB_RED   = 10;
-const int PIN_RGB_GREEN = 11;
-const int PIN_BUZZER    = 12;
+// அளவுத்திருத்த பதிவேடுகள் (Calibration Constants)
+int cleanAirBaselineR0 = 0; // சுத்தமான காற்றின் ஆரம்ப பே特லைன் மதிப்பு
+const int GAS_HAZARD_DELTA = 250; // பேஸ்லைனில் இருந்து எவ்வளவு உயர்ந்தால் ஆபத்து என்ற வரம்பு
+bool isCalibrationComplete = false;
+
+// நகரும் சராசரி ஃபில்டர் மாறிகள் (Moving Average Filter Buffer - 5 புள்ளிகள்)
+const int FILTER_SIZE = 5;
+int gasReadingsBuffer[FILTER_SIZE];
+int bufferWritePointer = 0;
 
 void setup() {
   Serial.begin(115200);
   while (!Serial) { ; }
   
-  // அறிவிப்பு பின்களை அவுட்புட் ஆக மாற்றுதல்
-  pinMode(PIN_RGB_RED, OUTPUT);
-  pinMode(PIN_RGB_GREEN, OUTPUT);
-  pinMode(PIN_BUZZER, OUTPUT);
+  Serial.println(F("\n=================================================="));
+  Serial.println(F(" SENTINEL-X // SENSOR SYSTEM CALIBRATION INTERFACE "));
+  Serial.println(F("=================================================="));
   
-  Serial.println(F("[HMI BOOT]: Initializing Optical Drivers and Acoustic Signal Rails..."));
-  executeHardwareHMIPowerUpTest(); // தொடக்க வன்பொருள் சோதனை ஓட்டம்
+  // 1. ஃபில்டர் பஃபரை ஆரம்பத்தில் பூஜ்ஜியமாக்குதல்
+  for (int i = 0; i < FILTER_SIZE; i++) {
+    gasReadingsBuffer[i] = 0;
+  }
+  
+  // 2. வன்பொருள் ஆன் ஆனதும் தானியங்கி அளவுத்திருத்தத்தை இயக்குதல் (Auto-Calibration)
+  executeAutomaticBaselineCalibration();
   
   currentSystemState = STATE_AUTONOMOUS_PATROL;
 }
@@ -49,142 +55,120 @@ void setup() {
 void loop() {
   unsigned long currentMillis = millis();
 
-  // நான்-பிளாக்கிங் எச்எம்ஐ கட்டுப்பாட்டு லூப்
-  if (currentMillis - lastHMILoopTimestamp >= hmiRefreshInterval) {
-    lastHMILoopTimestamp = currentMillis;
+  if (currentMillis - lastExecutionTimestamp >= executionInterval) {
+    lastExecutionTimestamp = currentMillis;
     
-    // சென்சார் மதிப்புகள் மற்றும் போலி தரவுகளைப் பெறுதல்
-    simulateTelemetrySensorBusPull();
+    // படி A: சென்சாரில் இருந்து அனலாக் சிக்னல்களைப் பெறுதல்
+    acquireRawHardwareSignals();
     
-    // பாதுகாப்பு எல்லை தணிக்கைச் சோதனை
-    executeSystemSafetyAuditChecks();
+    // படி B: நகரும் சராசரி அல்காரிதம் மூலம் மின்சார இரைச்சலை நீக்குதல் (Signal Smoothing)
+    filteredGasOutput = applyMovingAverageFilter(rawGasInput);
     
-    // தற்போதைய நிலைக்கு ஏற்ப எல்இடி விளக்குகள் மற்றும் அலார பஸரை இயக்குதல்
-    executeVisualAcousticPerceptionDrivers(currentMillis);
+    // படி C: அளவுத்திருத்த வரம்புகளுடன் தற்போதைய ஃபில்டர் தரவைச் சரிபார்த்தல்
+    executeDynamicThresholdAnalysis();
     
-    // தரவை வைஃபை டேஷ்போர்டுக்கு அனுப்புதல்
-    emitCentralIoTDataPacket();
+    // படி D: சீராக்கப்பட்ட சுத்தமான தரவை வெப் டேஷ்போர்டுக்கு அனுப்புதல்
+    emitCalibratedDataPacket();
   }
 }
 
 // ================================================================================
-// எச்எம்ஐ வன்பொருள் இயக்கப் பகுதி (HMI HARDWARE LAYER DRIVER LOGIC)
+// சிக்னல் பிராசஸிங் மற்றும் அல்காரிதம்கள் (SIGNAL PROCESSING METHODS)
 // ================================================================================
 
-void executeHardwareHMIPowerUpTest() {
-  // ரோபோ ஆன் ஆகும்போது விளக்குகள் மற்றும் பஸர் வேலை செய்கிறதா என்று சோதித்தல்
-  digitalWrite(PIN_RGB_RED, HIGH); delay(1000);
-  digitalWrite(PIN_RGB_GREEN, HIGH); delay(1000);
-  digitalWrite(PIN_RGB_RED, LOW);
-  digitalWrite(PIN_RGB_GREEN, LOW);
-  digitalWrite(PIN_BUZZER, LOW);
+void executeAutomaticBaselineCalibration() {
+  Serial.println(F("[CALIBRATION]: Robot is stationary. Sampling ambient clean air baseline..."));
+  
+  long baselineAccumulator = 0;
+  // 5 விநாடிகளில் 5 முறை காற்றைச் சுவாசித்து அதன் சராசரியைக் கணக்கிடுதல்
+  for (int i = 0; i < 5; i++) {
+    int sample = random(105, 125); // தொழிற்சாலையின் ஆரம்ப சுத்தமான காற்று வோல்டேஜ்
+    baselineAccumulator += sample;
+    Serial.print(F("."));
+    delay(1000);
+  }
+  
+  cleanAirBaselineR0 = baselineAccumulator / 5; // பேஸ்லைன் R0 லாக் செய்யப்பட்டது
+  isCalibrationComplete = true;
+  
+  Serial.print(F("\n[CALIBRATION SUCCESS]: Environmental Clean Air Baseline Locked at: "));
+  Serial.print(cleanAirBaselineR0);
+  Serial.println(F(" Analog Units.\n"));
 }
 
-void executeVisualAcousticPerceptionDrivers(unsigned long currentMillis) {
+void acquireRawHardwareSignals() {
+  readTempCelsius = 26.0 + (random(-5, 6) / 10.0);
+  
+  // சென்சாரில் இருந்து வரும் சிக்னலில் திடீர் வோல்டேஜ் இரைச்சல் (Spikes) ஏற்படுவதை உருவாக்குதல்
+  if (random(0, 100) > 85) {
+    rawGasInput = 115 + random(-10, 11) + 25; // இரைச்சலால் திடீரென மாறும் வோல்டேஜ்
+  } else {
+    rawGasInput = 115 + random(-5, 6);
+  }
+
+  // டெஸ்டிங்கிற்காக 8% வாய்ப்பில் ஒரு நிஜ வாயு கசிவு விபத்தை உருவாக்குதல்
+  if (random(0, 100) > 92) {
+    rawGasInput = 450; // விபத்து சிக்னல் வோல்டேஜ்
+    Serial.println(F("\n[REAL HAZARD DETECTED]: Toxic gas concentration crossing safety boundaries!"));
+  }
+  
+  // பேட்டரி சிமுலேஷன்
+  if (currentSystemState == STATE_AUTONOMOUS_PATROL && batteryCapacityPercent > 0) {
+    static int drainCounter = 0;
+    if (++drainCounter >= 8) {
+      batteryCapacityPercent--;
+      drainCounter = 0;
+    }
+  }
+}
+
+int applyMovingAverageFilter(int rawInput) {
   /*
-   * நான்-பிளாக்கிங் முறையில் 250ms கிளாக் பல்ஸ் பயன்படுத்தி 
-   * வன்பொருள் பின்களை மாற்றி மாற்றி ஆன்/ஆஃப் செய்யும் பகுதி.
+   * நகரும் சராசரி ஃபில்டர் அல்காரிதம் (Moving Average Filter).
+   * இது புதிய சிக்னலை உள்ளே வாங்கி, பஃபரில் உள்ள பழைய 5 எண்களின் 
+   * சராசரியைக் கணக்கிட்டு மின்சார இரைச்சலை (Jitter) முற்றிலும் நீக்கிவிடும்.
    */
-  static bool pulseToggleState = false;
-  pulseToggleState = !pulseToggleState; // ஒவ்வொரு 250ms-க்கும் நிலையை மாற்றுதல்
-
-  switch (currentSystemState) {
-    
-    case STATE_AUTONOMOUS_PATROL:
-      // குறியீடு 01: நிலையான நியான் பச்சை விளக்கு (பாதுகாப்பான ரோந்து நிலை)
-      digitalWrite(PIN_RGB_RED, LOW);
-      digitalWrite(PIN_RGB_GREEN, HIGH);
-      digitalWrite(PIN_BUZZER, LOW); // அலார சைரன் முற்றிலும் ஆஃப்
-      break;
-
-    case STATE_AUTO_DOCKING:
-      // குறியீடு 02: விட்டு விட்டு எரியும் மஞ்சள் விளக்கு (சிவப்பு + பச்சை சேர்ந்தால் மஞ்சள்)
-      if (pulseToggleState) {
-        digitalWrite(PIN_RGB_RED, HIGH);
-        digitalWrite(PIN_RGB_GREEN, HIGH); 
-      } else {
-        digitalWrite(PIN_RGB_RED, LOW);
-        digitalWrite(PIN_RGB_GREEN, LOW);
-      }
-      digitalWrite(PIN_BUZZER, LOW);
-      break;
-
-    case STATE_HAZARD_RESPONSE:
-      // குறியீடு 03: அதிவேகமாக மின்னும் சிவப்பு விளக்கு + தொடர்ச்சியான அவசர கால அலார சத்தம்
-      digitalWrite(PIN_RGB_GREEN, LOW);
-      if (pulseToggleState) {
-        digitalWrite(PIN_RGB_RED, HIGH);
-        digitalWrite(PIN_BUZZER, HIGH); // வெளியேற்ற சைரன் சத்தம் ஓட்டம்
-      } else {
-        digitalWrite(PIN_RGB_RED, LOW);
-        digitalWrite(PIN_BUZZER, LOW);
-      }
-      break;
-
-    case STATE_SYSTEM_FAULT_LOCK:
-      // குறியீடு 04: மெதுவாக 1 விநாடிக்கு ஒருமுறை மின்னும் அலார சத்தம் (பழுது நிலை)
-      digitalWrite(PIN_RGB_GREEN, LOW);
-      static int staccatoCounter = 0;
-      if (++staccatoCounter >= 4) { // 4 * 250ms = 1 விநாடிக்கு ஒருமுறை இயங்கும்
-        digitalWrite(PIN_RGB_RED, pulseToggleState ? HIGH : LOW);
-        digitalWrite(PIN_BUZZER, pulseToggleState ? HIGH : LOW);
-        staccatoCounter = 0;
-      }
-      break;
+  gasReadingsBuffer[bufferWritePointer] = rawInput;
+  bufferWritePointer = (bufferWritePointer + 1) % FILTER_SIZE; // பஃபர் சுழற்சி
+  
+  long sum = 0;
+  for (int i = 0; i < FILTER_SIZE; i++) {
+    sum += gasReadingsBuffer[i];
   }
+  
+  return sum / FILTER_SIZE; // சீராக்கப்பட்ட இறுதி மதிப்பு
 }
 
-void simulateTelemetrySensorBusPull() {
-  if (currentSystemState == STATE_AUTONOMOUS_PATROL) {
-    readTempCelsius = 26.5 + (random(-5, 6) / 10.0);
-    readGasPPM = random(40, 65);
-    readSmokeIndex = random(95, 120);
-    
-    // டெஸ்டிங்கிற்காகப் பேட்டரியைக் குறைத்துக் காட்டுதல்
-    static int simulationTimeTicks = 0;
-    if (++simulationTimeTicks >= 60) { 
-      batteryCapacityPercent = 15;
-    }
-    
-    // டெஸ்டிங்கிற்காகப் போலி கேஸ் விபத்து சிக்னலை உள்ளே செலுத்துதல்
-    if (random(0, 100) > 97) {
-      readGasPPM = 490;
-      readSmokeIndex = 580;
-    }
-  }
-}
-
-void executeSystemSafetyAuditChecks() {
-  if (readGasPPM > 400 || readSmokeIndex > 500) {
+void executeDynamicThresholdAnalysis() {
+  // தற்போதைய சீராக்கப்பட்ட கேஸ் மதிப்பு, அளவுத்திருத்த பேஸ்லைனை விட (Baseline + Delta) தாண்டினால்
+  if (filteredGasOutput >= (cleanAirBaselineR0 + GAS_HAZARD_DELTA)) {
     currentSystemState = STATE_HAZARD_RESPONSE;
   } 
   else if (batteryCapacityPercent <= 20) {
     currentSystemState = STATE_AUTO_DOCKING;
-    // சார்ஜ் சுழற்சி உருவகப்படுத்துதல்
-    batteryCapacityPercent += 20;
-    if (batteryCapacityPercent >= 100) {
-      batteryCapacityPercent = 100;
-      currentSystemState = STATE_AUTONOMOUS_PATROL;
-    }
+    batteryCapacityPercent = 100; // சார்ஜ் ஏறுதல் சிமுலேஷன்
+  } 
+  else {
+    currentSystemState = STATE_AUTONOMOUS_PATROL;
   }
 }
 
-void emitCentralIoTDataPacket() {
-  JsonDocument outDoc;
+void emitCalibratedDataPacket() {
+  JsonDocument doc;
   
-  String txtState = "PATROL";
-  if (currentSystemState == STATE_HAZARD_RESPONSE) txtState = "HAZARD_CRIT_ALERT";
-  if (currentSystemState == STATE_AUTO_DOCKING) txtState = "RETURNING_TO_DOCK_BASE";
-  if (currentSystemState == STATE_SYSTEM_FAULT_LOCK) txtState = "HARDWARE_SYSTEM_FAULT";
+  String stringState = "PATROL";
+  if (currentSystemState == STATE_HAZARD_RESPONSE) stringState = "HAZARD_CRIT_ALERT";
+  if (currentSystemState == STATE_AUTO_DOCKING) stringState = "CHARGING_AT_BASE";
 
-  outDoc["device"] = "SENTINEL-X";
-  outDoc["state"] = txtState;
-  outDoc["temp"] = readTempCelsius;
-  outDoc["gas"] = readGasPPM;
-  outDoc["smoke"] = readSmokeIndex;
-  outDoc["battery"] = batteryCapacityPercent;
+  doc["device"] = "SENTINEL-X";
+  doc["state"] = stringState;
+  doc["temp"] = readTempCelsius;
+  doc["raw_gas"] = rawGasInput;       // இரைச்சலுடன் கூடிய அனலாக் சிக்னல்
+  doc["filtered_gas"] = filteredGasOutput; // ஃபில்டர் செய்யப்பட்ட தூய்மையான சிக்னல்
+  doc["baseline_r0"] = cleanAirBaselineR0;
+  doc["battery"] = batteryCapacityPercent;
 
-  String txBuffer;
-  serializeJson(outDoc, txBuffer);
-  Serial.println(txBuffer); // இந்தத் தரவுத் தொகுப்புகள் மெம்பர் 1-ன் வெப் டேஷ்போர்டை இயக்கும்
+  String outputStream;
+  serializeJson(doc, outputStream);
+  Serial.println(outputStream); // இந்த சுத்தமான தரவு மெம்பர் 1-ன் வெப் வரைபடத்தை துல்லியமாக இயக்கும்
 }
