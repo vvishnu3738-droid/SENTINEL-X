@@ -5,6 +5,9 @@
 | Component                | Qty | Status               | 
 |------------------------- |-----|----------------------|
 | Arduino UNO Q            | 1   | Mandatory            | 
+| Component                | Qty | Status               |
+|------------------------- |-----|----------------------|
+| Arduino UNO Q            | 1   | Mandatory            |
 
 ---
 
