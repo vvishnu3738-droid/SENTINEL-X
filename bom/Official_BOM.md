@@ -2,9 +2,9 @@
 
 ## Main Controller
 
-| Component                | Qty | Status               | Approx. Price         |
-|------------------------- |-----|----------------------|-----------------------|
-| Arduino UNO Q            | 1   | Mandatory            | ₹TBD                  |
+| Component                | Qty | Status               | 
+|------------------------- |-----|----------------------|
+| Arduino UNO Q            | 1   | Mandatory            | 
 
 ---
 
